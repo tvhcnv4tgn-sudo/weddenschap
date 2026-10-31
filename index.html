@@ -174,10 +174,12 @@ const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTY-fqTlF
 const SHEET_EDIT_URL = "https://docs.google.com/spreadsheets/d/1-Dtfj7AfecjWLb2jrjwKWYsp2w0PHgzU8pHf618Kc_k/edit?gid=871749514#gid=871749514";
 
 const CONFIG = {
+  clientName: "Soma",
+  trainerName: "Alex",
   startDate:  "2026-10-31",
   targetDate: "2027-05-01",   // streefdatum (JJJJ-MM-DD)
-  weight: { label: "Gewicht cliënt", who: "Cliënt · moet ≤ 100 kg", start: 108, goal: 100, unit: "kg" },
-  bench:  { label: "Bankdrukken 1RM", who: "Trainer · moet ≥ 140 kg", start: 130, goal: 140, unit: "kg" },
+  weight: { label: "Gewicht Soma", who: "Soma · moet ≤ 100 kg", start: 108, goal: 100, unit: "kg" },
+  bench:  { label: "Bankdrukken Alex (1RM)", who: "Alex · moet ≥ 140 kg", start: 130, goal: 140, unit: "kg" },
   autoRefreshMinutes: 5,
 };
 /* ====================================================== */
@@ -406,7 +408,7 @@ function renderStatus(r) {
     st.textContent = "🏆 Beide doelen gehaald" + (r.bothSince ? " sinds " + fmtDate(r.bothSince) : "") + "!";
   } else {
     st.className = "big";
-    const open = [!r.weight.hit && "cliënt (gewicht)", !r.bench.hit && "trainer (bench)"].filter(Boolean);
+    const open = [!r.weight.hit && `${CONFIG.clientName} (gewicht)`, !r.bench.hit && `${CONFIG.trainerName} (bench)`].filter(Boolean);
     st.textContent = (r.weight.hit || r.bench.hit ? "Eén doel binnen — wachten op " : "Nog te doen: ") + open.join(" en ");
   }
   const daysLeft = Math.ceil((targetDate - now) / DAY);
@@ -455,7 +457,7 @@ async function refresh() {
 }
 
 document.getElementById("subtitle").textContent =
-  `Cliënt naar ≤ ${CONFIG.weight.goal} kg én trainer naar ${CONFIG.bench.goal} kg bankdrukken — tegelijk, vóór ${fmtDate(targetDate)}.`;
+  `${CONFIG.clientName} naar ≤ ${CONFIG.weight.goal} kg én ${CONFIG.trainerName} naar ${CONFIG.bench.goal} kg bankdrukken — tegelijk, vóór ${fmtDate(targetDate)}.`;
 const addBtn = document.getElementById("addBtn");
 if (isSet(SHEET_EDIT_URL)) addBtn.href = SHEET_EDIT_URL;
 else { addBtn.setAttribute("aria-disabled", "true"); addBtn.title = "Vul SHEET_EDIT_URL in"; }
