@@ -134,7 +134,9 @@
       <h1>De Weddenschap</h1>
       <p id="subtitle"></p>
     </div>
-    <a class="btn" id="addBtn" target="_blank" rel="noopener">＋ Meting toevoegen</a>
+    <div class="head-row" id="addBtns">
+      <a class="btn" id="addBtn" target="_blank" rel="noopener">＋ Meting toevoegen</a>
+    </div>
   </header>
 
   <section class="card status" id="status">
@@ -172,6 +174,13 @@
 const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTY-fqTlF_aOKL6XkiL1HAtSZVTUbSwajWbsBPIb_yACegC1dzfGD1V06b-HEfOah3rtEv0h-T1z_0s/pub?gid=871749514&single=true&output=csv";
 // Gewone (bewerk)link van dezelfde Sheet, voor de knop "Meting toevoegen".
 const SHEET_EDIT_URL = "https://docs.google.com/spreadsheets/d/1-Dtfj7AfecjWLb2jrjwKWYsp2w0PHgzU8pHf618Kc_k/edit?gid=871749514#gid=871749514";
+
+// Losse Sheets per persoon (kolommen: Datum, Waarde). Zijn beide csv-links ingevuld,
+// dan worden deze gebruikt in plaats van de gecombineerde Sheet hierboven.
+const SHEETS = {
+  weight: { csv: "https://docs.google.com/spreadsheets/d/e/2PACX-1vSJ3batuTkbrBOW9XV1h7kDaIsSQS4SaTzH8kZsUvzI0Qyurp6bUJJ-TBrLeQzKJdr9xAw7OVPFonom/pub?output=csv", edit: "PLAK_HIER_DE_LINK" },  // Soma
+  bench:  { csv: "https://docs.google.com/spreadsheets/d/e/2PACX-1vQmIfrnmWbMNmMyMDMyoK8jP6ArpQga-UWPJxRXjjCvhjQifSFacHyU5kdBT50Awj9ZDyOkwtqntb08/pub?output=csv", edit: "PLAK_HIER_DE_LINK" },  // Alex
+};
 
 const CONFIG = {
   clientName: "Soma",
@@ -241,15 +250,16 @@ function normType(s) {
   return null;
 }
 
-// records = objecten met kolomnamen (Datum, Type, Waarde) als sleutels
-function rowsToMeasurements(records) {
+// records = objecten met kolomnamen (Datum, Type, Waarde) als sleutels.
+// Met fixedType (losse Sheet per persoon) is er geen Type-kolom: Datum, Waarde.
+function rowsToMeasurements(records, fixedType) {
   const out = [];
   for (const r of records) {
     const keys = Object.keys(r);
     const col = (name, i) => r[keys.find(k => k.includes(name)) ?? keys[i]];
     const date = parseDate(col("datum", 0));
-    const type = normType(col("type", 1));
-    const value = parseNumber(col("waarde", 2));
+    const type = fixedType || normType(col("type", 1));
+    const value = parseNumber(col("waarde", fixedType ? 1 : 2));
     if (!type || !isFinite(value) || !date) continue;
     out.push({ type, value, date });
   }
@@ -258,12 +268,23 @@ function rowsToMeasurements(records) {
 }
 
 // ---------- Data ophalen ----------
+const separateSheets = isSet(SHEETS.weight.csv) && isSet(SHEETS.bench.csv);
+
 async function loadData() {
+  if (separateSheets) {
+    const [w, b] = await Promise.all([fetchRecords(SHEETS.weight.csv), fetchRecords(SHEETS.bench.csv)]);
+    const list = [...rowsToMeasurements(w, "weight"), ...rowsToMeasurements(b, "bench")];
+    return { list: list.sort((x, y) => x.date - y.date), demo: false };
+  }
   if (!isSet(SHEET_CSV_URL)) return { list: demoData(), demo: true };
-  const sep = SHEET_CSV_URL.includes("?") ? "&" : "?";
+  return { list: rowsToMeasurements(await fetchRecords(SHEET_CSV_URL)), demo: false };
+}
+
+async function fetchRecords(url) {
+  const sep = url.includes("?") ? "&" : "?";
   let res;
   try {
-    res = await fetch(SHEET_CSV_URL + sep + "t=" + Date.now(), { cache: "no-store" });
+    res = await fetch(url + sep + "t=" + Date.now(), { cache: "no-store" });
   } catch {
     // Google weigert het verzoek als de pagina als los bestand (file://) is geopend
     if (location.protocol === "file:") throw new Error("Open de site via een webserver (bijv. http://localhost) in plaats van als los bestand; Google blokkeert het ophalen vanaf file://.");
@@ -272,7 +293,7 @@ async function loadData() {
   if (!res.ok) throw new Error(`De sheet gaf een foutmelding (HTTP ${res.status}). Is hij als CSV gepubliceerd?`);
   const text = await res.text();
   if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("De link geeft een webpagina terug in plaats van CSV. Gebruik de 'Publiceren op internet → CSV'-link.");
-  return { list: rowsToMeasurements(parseCSV(text)), demo: false };
+  return parseCSV(text);
 }
 
 function demoData() {
@@ -459,7 +480,15 @@ async function refresh() {
 document.getElementById("subtitle").textContent =
   `${CONFIG.clientName} naar ≤ ${CONFIG.weight.goal} kg én ${CONFIG.trainerName} naar ${CONFIG.bench.goal} kg bankdrukken — tegelijk, vóór ${fmtDate(targetDate)}.`;
 const addBtn = document.getElementById("addBtn");
-if (isSet(SHEET_EDIT_URL)) addBtn.href = SHEET_EDIT_URL;
+if (separateSheets) {
+  // Eén knop per persoon, elk naar de eigen Sheet
+  document.getElementById("addBtns").innerHTML = [
+    [CONFIG.clientName, "gewicht", SHEETS.weight.edit, "var(--weight)"],
+    [CONFIG.trainerName, "bench", SHEETS.bench.edit, "var(--bench)"],
+  ].map(([name, what, url, color]) =>
+    `<a class="btn" style="background:${color}" target="_blank" rel="noopener" ${isSet(url) ? `href="${url}"` : 'aria-disabled="true"'}>＋ ${name}: ${what}</a>`
+  ).join("");
+} else if (isSet(SHEET_EDIT_URL)) addBtn.href = SHEET_EDIT_URL;
 else { addBtn.setAttribute("aria-disabled", "true"); addBtn.title = "Vul SHEET_EDIT_URL in"; }
 document.getElementById("refresh").addEventListener("click", refresh);
 refresh();
