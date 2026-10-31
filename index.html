@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>De Weddenschap</title>
+<meta name="theme-color" content="#0f1115">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #15171c;
+    --muted: #6b7280;
+    --line: #e5e7eb;
+    --weight: #2563eb;
+    --bench: #ea580c;
+    --good: #16a34a;
+    --bad: #dc2626;
+    --track: #eceef2;
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f1115;
+      --card: #181b22;
+      --text: #f1f2f4;
+      --muted: #9aa1ad;
+      --line: #2a2f3a;
+      --weight: #60a5fa;
+      --bench: #fb923c;
+      --good: #4ade80;
+      --bad: #f87171;
+      --track: #252a34;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 720px; margin: 0 auto; display: grid; gap: 14px; }
+  header h1 { font-size: 1.6rem; margin: 4px 0 2px; letter-spacing: -0.02em; }
+  header p { margin: 0; color: var(--muted); font-size: .95rem; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .status { display: grid; gap: 10px; }
+  .status .big { font-size: 1.25rem; font-weight: 700; }
+  .status .big.good { color: var(--good); }
+  .countdown { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    background: var(--track);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: .9rem;
+    font-variant-numeric: tabular-nums;
+  }
+  .goals { display: grid; gap: 14px; grid-template-columns: 1fr; }
+  @media (min-width: 640px) { .goals { grid-template-columns: 1fr 1fr; } }
+  .goal h2 {
+    font-size: 1rem; margin: 0 0 2px;
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  }
+  .goal .who { color: var(--muted); font-size: .85rem; margin-bottom: 10px; }
+  .goal .now { font-size: 2.2rem; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .goal .now small { font-size: 1rem; font-weight: 600; color: var(--muted); }
+  .bar { height: 12px; background: var(--track); border-radius: 999px; overflow: hidden; margin: 10px 0 6px; }
+  .bar > div { height: 100%; width: 0; border-radius: 999px; transition: width .8s ease; }
+  .goal.weight .bar > div { background: var(--weight); }
+  .goal.bench .bar > div { background: var(--bench); }
+  .row { display: flex; justify-content: space-between; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+  .stats { margin: 12px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: .88rem; }
+  .stats dt { color: var(--muted); }
+  .stats dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .badge { font-size: .75rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--track); color: var(--muted); white-space: nowrap; }
+  .badge.good { background: color-mix(in srgb, var(--good) 18%, transparent); color: var(--good); }
+  .chart { width: 100%; height: auto; display: block; margin-top: 12px; }
+  .chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .goal-line { stroke: var(--good); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .chart .plan-line { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 4; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: .8rem; color: var(--muted); margin-top: 6px; }
+  .legend span::before { content: ""; display: inline-block; width: 14px; height: 0; border-top: 2px solid currentColor; vertical-align: middle; margin-right: 5px; }
+  .legend .l-goal { color: var(--good); }
+  .legend .l-goal::before { border-top-style: dashed; }
+  .legend .l-plan::before { border-top-style: dotted; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: .8rem; }
+  td:last-child, th:last-child { text-align: right; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+  details summary { cursor: pointer; font-weight: 600; }
+  .notice { font-size: .85rem; color: var(--muted); }
+  .notice.warn { color: var(--bad); }
+  footer { display: flex; justify-content: space-between; align-items: center; gap: 10px; color: var(--muted); font-size: .8rem; }
+  button {
+    font: inherit; font-size: .85rem; color: var(--text);
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+    padding: 6px 14px; cursor: pointer;
+  }
+  button:active, .btn:active { transform: scale(.97); }
+  button:disabled { opacity: .6; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: .95rem; font-weight: 600; text-decoration: none;
+    color: #fff; background: var(--weight); border-radius: 999px; padding: 10px 18px;
+  }
+  .btn[aria-disabled="true"] { opacity: .5; pointer-events: none; }
+  .head-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+  .spinner {
+    width: 18px; height: 18px; border-radius: 50%; display: inline-block; vertical-align: -3px; margin-right: 8px;
+    border: 2.5px solid var(--track); border-top-color: var(--weight);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-box {
+    border-radius: 12px; padding: 12px 14px; font-size: .9rem;
+    background: color-mix(in srgb, var(--bad) 12%, transparent); color: var(--bad);
+  }
+  body:not(.loaded) .goals, body:not(.loaded) .log-card { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <header class="head-row">
+    <div>
+      <h1>De Weddenschap</h1>
+      <p id="subtitle"></p>
+    </div>
+    <a class="btn" id="addBtn" target="_blank" rel="noopener">＋ Meting toevoegen</a>
+  </header>
+
+  <section class="card status" id="status">
+    <div class="big" id="statusText"><span class="spinner"></span>Metingen laden…</div>
+    <div class="countdown" id="countdown"></div>
+    <div class="notice" id="notice"></div>
+  </section>
+
+  <section class="goals">
+    <article class="card goal weight" id="goal-weight"></article>
+    <article class="card goal bench" id="goal-bench"></article>
+  </section>
+
+  <section class="card log-card">
+    <details>
+      <summary>Alle metingen</summary>
+      <table>
+        <thead><tr><th>Datum</th><th>Type</th><th>Waarde</th></tr></thead>
+        <tbody id="log"></tbody>
+      </table>
+    </details>
+  </section>
+
+  <footer>
+    <span id="updated"></span>
+    <button id="refresh" type="button">Vernieuwen</button>
+  </footer>
+</main>
+
+<script>
+/* ======================= CONFIG ======================= */
+// URL van je als CSV gepubliceerde Google Sheet
+// (Bestand → Delen → Publiceren op internet → kies het tabblad → CSV).
+// Zolang hier de placeholder staat, wordt demo-data getoond.
+const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTY-fqTlF_aOKL6XkiL1HAtSZVTUbSwajWbsBPIb_yACegC1dzfGD1V06b-HEfOah3rtEv0h-T1z_0s/pub?gid=871749514&single=true&output=csv";
+// Gewone (bewerk)link van dezelfde Sheet, voor de knop "Meting toevoegen".
+const SHEET_EDIT_URL = "https://docs.google.com/spreadsheets/d/1-Dtfj7AfecjWLb2jrjwKWYsp2w0PHgzU8pHf618Kc_k/edit?gid=871749514#gid=871749514";
+
+const CONFIG = {
+  startDate:  "2026-10-31",
+  targetDate: "2027-05-01",   // streefdatum (JJJJ-MM-DD)
+  weight: { label: "Gewicht cliënt", who: "Cliënt · moet ≤ 100 kg", start: 108, goal: 100, unit: "kg" },
+  bench:  { label: "Bankdrukken 1RM", who: "Trainer · moet ≥ 140 kg", start: 130, goal: 140, unit: "kg" },
+  autoRefreshMinutes: 5,
+};
+/* ====================================================== */
+
+const DAY = 864e5;
+const startDate = parseDate(CONFIG.startDate);
+const targetDate = parseDate(CONFIG.targetDate);
+const fmtDate = d => d.toLocaleDateString("nl-NL", { day: "numeric", month: "short", year: "numeric" });
+const fmtNum = n => n.toLocaleString("nl-NL", { maximumFractionDigits: 1 });
+
+const isSet = url => url && !url.includes("PLAK_HIER");
+
+// ---------- CSV parsing (PapaParse) ----------
+function parseCSV(text) {
+  if (typeof Papa === "undefined") throw new Error("PapaParse kon niet worden geladen (geen internet?)");
+  return Papa.parse(text, { header: true, skipEmptyLines: "greedy", transformHeader: h => h.trim().toLowerCase() }).data;
+}
+
+// "107,5" / "107.5" / "107,5 kg" / "1.107,5" → number
+function parseNumber(s) {
+  if (s == null) return NaN;
+  s = String(s).trim().replace(/[^\d,.\-]/g, "");
+  if (!s) return NaN;
+  if (s.includes(",") && s.includes(".")) {
+    // laatste scheidingsteken is het decimaalteken
+    s = s.lastIndexOf(",") > s.lastIndexOf(".")
+      ? s.replace(/\./g, "").replace(",", ".")
+      : s.replace(/,/g, "");
+  } else s = s.replace(",", ".");
+  return parseFloat(s);
+}
+
+// Ondersteunt 2026-10-31, 31-10-2026, 31/10/2026, 31.10.2026, met optionele tijd.
+// Bij d/m/j-notatie wordt Nederlandse volgorde (dag eerst) aangenomen,
+// tenzij het tweede getal > 12 is (dan is het een Amerikaanse m/d/j).
+function parseDate(s) {
+  if (!s) return null;
+  s = String(s).trim();
+  let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) return mk(+m[1], +m[2], +m[3], m[4], m[5], m[6]);
+  m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) {
+    let d = +m[1], mo = +m[2], y = +m[3];
+    if (y < 100) y += 2000;
+    if (mo > 12 && d <= 12) [d, mo] = [mo, d];
+    return mk(y, mo, d, m[4], m[5], m[6]);
+  }
+  return null;
+  function mk(y, mo, d, h, mi, se) {
+    const dt = new Date(y, mo - 1, d, +(h || 0), +(mi || 0), +(se || 0));
+    return isNaN(dt) || dt.getMonth() !== mo - 1 ? null : dt;
+  }
+}
+
+function normType(s) {
+  s = String(s || "").trim().toLowerCase();
+  if (/^(gewicht|weight|kg|weegschaal)/.test(s)) return "weight";
+  if (/^(bench|bank|1rm)/.test(s)) return "bench";
+  return null;
+}
+
+// records = objecten met kolomnamen (Datum, Type, Waarde) als sleutels
+function rowsToMeasurements(records) {
+  const out = [];
+  for (const r of records) {
+    const keys = Object.keys(r);
+    const col = (name, i) => r[keys.find(k => k.includes(name)) ?? keys[i]];
+    const date = parseDate(col("datum", 0));
+    const type = normType(col("type", 1));
+    const value = parseNumber(col("waarde", 2));
+    if (!type || !isFinite(value) || !date) continue;
+    out.push({ type, value, date });
+  }
+  // Sorteer op datum (stabiel: bij gelijke datum telt de laatste rij in de sheet als meest recent)
+  return out.sort((a, b) => a.date - b.date);
+}
+
+// ---------- Data ophalen ----------
+async function loadData() {
+  if (!isSet(SHEET_CSV_URL)) return { list: demoData(), demo: true };
+  const sep = SHEET_CSV_URL.includes("?") ? "&" : "?";
+  let res;
+  try {
+    res = await fetch(SHEET_CSV_URL + sep + "t=" + Date.now(), { cache: "no-store" });
+  } catch {
+    // Google weigert het verzoek als de pagina als los bestand (file://) is geopend
+    if (location.protocol === "file:") throw new Error("Open de site via een webserver (bijv. http://localhost) in plaats van als los bestand; Google blokkeert het ophalen vanaf file://.");
+    throw new Error("De sheet is niet bereikbaar. Controleer je internetverbinding.");
+  }
+  if (!res.ok) throw new Error(`De sheet gaf een foutmelding (HTTP ${res.status}). Is hij als CSV gepubliceerd?`);
+  const text = await res.text();
+  if (/^\s*<(!doctype|html)/i.test(text)) throw new Error("De link geeft een webpagina terug in plaats van CSV. Gebruik de 'Publiceren op internet → CSV'-link.");
+  return { list: rowsToMeasurements(parseCSV(text)), demo: false };
+}
+
+function demoData() {
+  const csv = `Datum,Type,Waarde
+31-10-2026,gewicht,108
+31-10-2026,bench,130
+07-11-2026,gewicht,"107,4"
+
+14-11-2026,gewicht,"106,9"
+21-11-2026,gewicht,"106,2"
+21-11-2026,bench,"132,5"
+28-11-2026,gewicht,"105,8"
+05-12-2026,gewicht,"105,1"
+12-12-2026,gewicht,"104,7"
+12-12-2026,bench,135
+`;
+  return rowsToMeasurements(parseCSV(csv));
+}
+
+// ---------- Berekeningen ----------
+function analyse(list) {
+  const res = {};
+  for (const key of ["weight", "bench"]) {
+    const cfg = CONFIG[key];
+    const lower = cfg.goal < cfg.start; // true = lager is beter
+    const pts = [{ date: startDate, value: cfg.start, base: true },
+                 ...list.filter(m => m.type === key && m.date >= startDate)];
+    const last = pts[pts.length - 1];
+    const hit = v => lower ? v <= cfg.goal : v >= cfg.goal;
+    const total = Math.abs(cfg.goal - cfg.start);
+    const done = lower ? cfg.start - last.value : last.value - cfg.start;
+    const pct = Math.max(0, Math.min(100, (done / total) * 100));
+    const best = lower ? Math.min(...pts.map(p => p.value)) : Math.max(...pts.map(p => p.value));
+
+    // Trend: lineaire regressie over de metingen van de laatste 6 weken (min. 2 punten)
+    const recent = pts.filter(p => p.date >= +last.date - 42 * DAY);
+    const trendPts = recent.length >= 2 ? recent : pts;
+    let slope = null, eta = null;
+    if (trendPts.length >= 2 && +trendPts.at(-1).date > +trendPts[0].date) {
+      const xs = trendPts.map(p => (p.date - startDate) / DAY), ys = trendPts.map(p => p.value);
+      const mx = avg(xs), my = avg(ys);
+      const num = xs.reduce((s, x, i) => s + (x - mx) * (ys[i] - my), 0);
+      const den = xs.reduce((s, x) => s + (x - mx) ** 2, 0);
+      slope = den ? num / den : null; // per dag
+      if (slope && (lower ? slope < 0 : slope > 0) && !hit(last.value)) {
+        const days = (cfg.goal - last.value) / slope;
+        eta = new Date(+last.date + days * DAY);
+      }
+    }
+    const daysLeft = Math.max(0, (targetDate - new Date()) / DAY);
+    const needPerWeek = daysLeft > 0 ? Math.abs(cfg.goal - last.value) / (daysLeft / 7) : null;
+
+    res[key] = { cfg, pts, last, hit: hit(last.value), pct, done, total, best, slope, eta, needPerWeek, hitFn: hit };
+  }
+
+  // Eerste moment waarop beide doelen tegelijk gehaald waren (op basis van de meest recente meting per type)
+  let bothSince = null;
+  const cur = { weight: CONFIG.weight.start, bench: CONFIG.bench.start };
+  for (const m of list.filter(m => m.date >= startDate)) {
+    cur[m.type] = m.value;
+    const ok = res.weight.hitFn(cur.weight) && res.bench.hitFn(cur.bench);
+    if (ok && !bothSince) bothSince = m.date;
+    if (!ok) bothSince = null;
+  }
+  res.bothSince = bothSince;
+  return res;
+}
+const avg = a => a.reduce((s, x) => s + x, 0) / a.length;
+
+// ---------- Rendering ----------
+function renderGoal(el, key, r) {
+  const { cfg, last, pct, hit, best, slope, eta, needPerWeek } = r;
+  const lower = cfg.goal < cfg.start;
+  const remaining = Math.max(0, lower ? last.value - cfg.goal : cfg.goal - last.value);
+  const perWeek = slope != null ? slope * 7 : null;
+  const etaText = hit ? "Gehaald" : eta ? fmtDate(eta) : "—";
+  const etaOk = eta && eta <= targetDate;
+  el.innerHTML = `
+    <h2>${cfg.label} <span class="badge ${hit ? "good" : ""}">${hit ? "✓ Doel gehaald" : Math.round(pct) + "%"}</span></h2>
+    <div class="who">${cfg.who}</div>
+    <div class="now">${fmtNum(last.value)} <small>${cfg.unit}</small></div>
+    <div class="bar"><div style="width:0"></div></div>
+    <div class="row"><span>Start ${fmtNum(cfg.start)}</span><span>Doel ${fmtNum(cfg.goal)}</span></div>
+    <dl class="stats">
+      <dt>Nog te gaan</dt><dd>${hit ? "0" : fmtNum(remaining)} ${cfg.unit}</dd>
+      <dt>${lower ? "Laagste" : "Beste"}</dt><dd>${fmtNum(best)} ${cfg.unit}</dd>
+      <dt>Trend / week</dt><dd>${perWeek == null ? "—" : (perWeek > 0 ? "+" : "") + fmtNum(perWeek) + " " + cfg.unit}</dd>
+      <dt>Nodig / week</dt><dd>${hit || needPerWeek == null ? "—" : (lower ? "−" : "+") + fmtNum(needPerWeek) + " " + cfg.unit}</dd>
+      <dt>Prognose</dt><dd style="color:${hit || etaOk ? "var(--good)" : eta ? "var(--bad)" : "inherit"}">${etaText}</dd>
+      <dt>Laatste meting</dt><dd>${last.base ? "—" : fmtDate(last.date)}</dd>
+    </dl>
+    ${chartSVG(key, r)}
+    <div class="legend"><span style="color:var(--${key})">Metingen</span><span class="l-goal">Doel</span><span class="l-plan">Schema</span></div>`;
+  requestAnimationFrame(() => el.querySelector(".bar > div").style.width = pct + "%");
+}
+
+function chartSVG(key, r) {
+  const { cfg, pts } = r;
+  const W = 320, H = 170, L = 34, R = 8, T = 10, B = 22;
+  const x0 = +startDate, x1 = Math.max(+targetDate, +pts.at(-1).date);
+  const vals = [cfg.start, cfg.goal, ...pts.map(p => p.value)];
+  let y0 = Math.floor(Math.min(...vals) - 1), y1 = Math.ceil(Math.max(...vals) + 1);
+  const X = t => L + ((t - x0) / (x1 - x0)) * (W - L - R);
+  const Y = v => T + (1 - (v - y0) / (y1 - y0)) * (H - T - B);
+  const color = `var(--${key})`;
+
+  let g = "";
+  const step = Math.max(1, Math.ceil((y1 - y0) / 5));
+  for (let v = Math.ceil(y0 / step) * step; v <= y1; v += step) {
+    g += `<line class="grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/><text x="${L - 6}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  }
+  // maandlabels
+  for (let d = new Date(startDate.getFullYear(), startDate.getMonth() + 1, 1); d <= x1; d = new Date(d.getFullYear(), d.getMonth() + 1, 1)) {
+    g += `<text x="${X(+d)}" y="${H - 6}" text-anchor="middle">${d.toLocaleDateString("nl-NL", { month: "short" }).replace(".", "")}</text>`;
+  }
+  g += `<line class="goal-line" x1="${L}" x2="${W - R}" y1="${Y(cfg.goal)}" y2="${Y(cfg.goal)}"/>`;
+  g += `<line class="plan-line" x1="${X(x0)}" y1="${Y(cfg.start)}" x2="${X(+targetDate)}" y2="${Y(cfg.goal)}"/>`;
+  // vandaag
+  const now = Date.now();
+  if (now > x0 && now < x1) g += `<line x1="${X(now)}" x2="${X(now)}" y1="${T}" y2="${H - B}" stroke="var(--muted)" stroke-opacity=".35"/>`;
+  const path = pts.map((p, i) => (i ? "L" : "M") + X(+p.date).toFixed(1) + " " + Y(p.value).toFixed(1)).join(" ");
+  g += `<path d="${path}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  g += pts.map(p => `<circle cx="${X(+p.date)}" cy="${Y(p.value)}" r="3" fill="${color}"><title>${fmtDate(p.date)}: ${fmtNum(p.value)} ${cfg.unit}</title></circle>`).join("");
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Verloop ${cfg.label}">${g}</svg>`;
+}
+
+function renderStatus(r) {
+  const st = document.getElementById("statusText");
+  const now = new Date();
+  const both = r.weight.hit && r.bench.hit;
+  if (both) {
+    st.className = "big good";
+    st.textContent = "🏆 Beide doelen gehaald" + (r.bothSince ? " sinds " + fmtDate(r.bothSince) : "") + "!";
+  } else {
+    st.className = "big";
+    const open = [!r.weight.hit && "cliënt (gewicht)", !r.bench.hit && "trainer (bench)"].filter(Boolean);
+    st.textContent = (r.weight.hit || r.bench.hit ? "Eén doel binnen — wachten op " : "Nog te doen: ") + open.join(" en ");
+  }
+  const daysLeft = Math.ceil((targetDate - now) / DAY);
+  const elapsed = Math.min(100, Math.max(0, ((now - startDate) / (targetDate - startDate)) * 100));
+  document.getElementById("countdown").innerHTML =
+    `<span class="pill">${daysLeft >= 0 ? daysLeft + " dagen te gaan" : Math.abs(daysLeft) + " dagen over de streefdatum"}</span>` +
+    `<span class="pill">${Math.round(elapsed)}% van de tijd verstreken</span>` +
+    `<span class="pill">Streefdatum ${fmtDate(targetDate)}</span>`;
+}
+
+function renderLog(list) {
+  document.getElementById("log").innerHTML = list.slice().reverse().map(m =>
+    `<tr><td>${fmtDate(m.date)}</td><td><span class="dot" style="background:var(--${m.type})"></span>${m.type === "weight" ? "Gewicht" : "Bench"}</td><td>${fmtNum(m.value)} kg</td></tr>`
+  ).join("") || `<tr><td colspan="3">Nog geen metingen.</td></tr>`;
+}
+
+async function refresh() {
+  const notice = document.getElementById("notice");
+  const btn = document.getElementById("refresh");
+  btn.disabled = true; btn.textContent = "Laden…";
+  try {
+    const { list, demo } = await loadData();
+    const r = analyse(list);
+    renderStatus(r);
+    renderGoal(document.getElementById("goal-weight"), "weight", r.weight);
+    renderGoal(document.getElementById("goal-bench"), "bench", r.bench);
+    renderLog(list);
+    document.body.classList.add("loaded");
+    notice.className = "notice";
+    notice.textContent = demo ? "Demo-data: vul SHEET_CSV_URL in om echte metingen te tonen." : "";
+    document.getElementById("updated").textContent = "Bijgewerkt " + new Date().toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    console.error(e);
+    if (!document.body.classList.contains("loaded")) {
+      // Nog nooit geladen: toon foutmelding i.p.v. lege kaarten
+      const st = document.getElementById("statusText");
+      st.className = "big";
+      st.textContent = "Metingen konden niet worden geladen";
+      document.getElementById("countdown").innerHTML = "";
+    }
+    notice.className = "";
+    notice.innerHTML = `<div class="error-box">${e.message}${document.body.classList.contains("loaded") ? " Je ziet de laatst geladen gegevens." : ""}</div>`;
+  } finally {
+    btn.disabled = false; btn.textContent = "Vernieuwen";
+  }
+}
+
+document.getElementById("subtitle").textContent =
+  `Cliënt naar ≤ ${CONFIG.weight.goal} kg én trainer naar ${CONFIG.bench.goal} kg bankdrukken — tegelijk, vóór ${fmtDate(targetDate)}.`;
+const addBtn = document.getElementById("addBtn");
+if (isSet(SHEET_EDIT_URL)) addBtn.href = SHEET_EDIT_URL;
+else { addBtn.setAttribute("aria-disabled", "true"); addBtn.title = "Vul SHEET_EDIT_URL in"; }
+document.getElementById("refresh").addEventListener("click", refresh);
+refresh();
+if (CONFIG.autoRefreshMinutes > 0) setInterval(refresh, CONFIG.autoRefreshMinutes * 60e3);
+</script>
+</body>
+</html>
